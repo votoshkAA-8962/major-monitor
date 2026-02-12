@@ -6,7 +6,9 @@ import re
 
 URL = "https://www.major-expert.ru/buy/"
 BASE = "https://www.major-expert.ru"
-MAX_PRICE = 5000000
+
+MIN_PRICE = 100000
+MAX_PRICE = 3000000
 
 TOKEN = "8447981017:AAH8HboVB0LTZwdHCO7G4tGYrPJQq9oaKSg"
 CHAT_ID = "1436689911"
@@ -18,16 +20,15 @@ def send_telegram(text):
         data={
             "chat_id": CHAT_ID,
             "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": False
+            "disable_web_page_preview": True
         }
     )
 
 
-def parse_price(text):
-    numbers = re.sub(r"[^\d]", "", text)
-    if numbers:
-        return int(numbers)
+def extract_price(text):
+    match = re.search(r"([\d\s]+)\s*руб", text)
+    if match:
+        return int(match.group(1).replace(" ", ""))
     return None
 
 
@@ -38,31 +39,31 @@ def get_ads():
 
     ads = []
 
-    cards = soup.find_all("a", href=True)
-
-    for card in cards:
+    for card in soup.find_all("a", href=True):
         href = card["href"]
 
         if "/cars/" in href:
-            link = BASE + href
-            text = card.get_text(" ", strip=True)
+            full_text = card.get_text(" ", strip=True)
 
-            price = parse_price(text)
-            if price and price <= MAX_PRICE:
+            price = extract_price(full_text)
+            if price and MIN_PRICE <= price <= MAX_PRICE:
+                link = BASE + href
+
                 ads.append({
                     "link": link,
                     "price": price,
-                    "title": text[:150]
+                    "text": full_text
                 })
 
     return ads
 
 
 def load_old():
-    if not os.path.exists("ads.json"):
+    try:
+        with open("ads.json", "r") as f:
+            return json.load(f)
+    except:
         return []
-    with open("ads.json", "r") as f:
-        return json.load(f)
 
 
 def save_ads(ads):
@@ -79,13 +80,7 @@ def main():
     fresh = [ad for ad in new_ads if ad["link"] not in old_links]
 
     for ad in fresh:
-        message = f"""
-<b>{ad['title']}</b>
-
-💰 {format(ad['price'], ",").replace(",", " ")} ₽
-
-🔗 {ad['link']}
-"""
+        message = f"{format(ad['price'], ',').replace(',', ' ')} руб. | {ad['text']}\n{ad['link']}"
         send_telegram(message)
 
     save_ads(new_ads)
