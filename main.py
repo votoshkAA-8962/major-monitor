@@ -1,101 +1,91 @@
 import requests
-from bs4 import BeautifulSoup
+import time
 import json
 import os
-import re
 
-URL = "https://www.major-expert.ru/buy/"
-BASE = "https://www.major-expert.ru"
+TOKEN = "ТВОЙ_TOKEN"
+CHAT_ID = "ТВОЙ_CHAT_ID"
 
-MIN_PRICE = 100000
-MAX_PRICE = 3000000
+API_URL = "https://new.major-expert.ru/api/items-by-url"
+CHECK_INTERVAL = 60   # проверка раз в минуту
 
-TOKEN = "8447981017:AAH8HboVB0LTZwdHCO7G4tGYrPJQq9oaKSg"
-CHAT_ID = "1436689911"
+PRICE_MIN = 100000
+PRICE_MAX = 5000000
 
-DB_FILE = "sent_ads.json"
-
-
-def send_telegram(text):
-    requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        data={
-            "chat_id": CHAT_ID,
-            "text": text,
-            "disable_web_page_preview": True
-        }
-    )
-
-
-def extract_price(text):
-    match = re.search(r"([\d\s]+)\s*руб", text)
-    if match:
-        return int(match.group(1).replace(" ", ""))
-    return None
-
-
-def extract_id(link):
-    match = re.search(r"/cars/(\d+)", link)
-    if match:
-        return match.group(1)
-    return None
+DB_FILE = "sent.json"
 
 
 def load_sent():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    return []
+    if not os.path.exists(DB_FILE):
+        return set()
+    with open(DB_FILE, "r") as f:
+        return set(json.load(f))
 
 
-def save_sent(data):
+def save_sent(sent_ids):
     with open(DB_FILE, "w") as f:
-        json.dump(data, f)
+        json.dump(list(sent_ids), f)
 
 
-def get_ads():
-    headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(URL, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    ads = []
-
-    for card in soup.find_all("a", href=True):
-        href = card["href"]
-
-        if "/cars/" in href:
-            link = BASE + href
-            full_text = card.get_text(" ", strip=True)
-
-            price = extract_price(full_text)
-            if price and MIN_PRICE <= price <= MAX_PRICE:
-
-                ad_id = extract_id(link)
-
-                ads.append({
-                    "id": ad_id,
-                    "link": link,
-                    "price": price,
-                    "text": full_text
-                })
-
-    return ads
+def send_telegram(text):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": text,
+        "disable_web_page_preview": True
+    })
 
 
-def main():
-    sent_ads = load_sent()
-    new_ads = get_ads()
+def get_cars():
+    params = {
+        "url": "/cars/moscow/"
+    }
 
-    updated_sent = sent_ads.copy()
+    r = requests.get(API_URL, params=params, timeout=10)
+    data = r.json()
 
-    for ad in new_ads:
-        if ad["id"] not in sent_ads:
-            message = f"{format(ad['price'], ',').replace(',', ' ')} руб. | {ad['text']}\n{ad['link']}"
+    return data["data"]["items"]
+
+
+def format_message(car):
+    price = car.get("price", 0)
+    name = car.get("fullName", "Без названия")
+    car_id = car.get("oid")
+
+    link = f"https://new.major-expert.ru/cars/{car_id}/"
+
+    text = f"{price:,} руб. | {name} {link}"
+    return text.replace(",", " ")
+
+
+sent_ids = load_sent()
+
+print("Бот запущен...")
+
+while True:
+    try:
+        cars = get_cars()
+
+        for car in cars:
+            car_id = car["id"]
+            price = car.get("price", 0)
+
+            if price < PRICE_MIN or price > PRICE_MAX:
+                continue
+
+            if car_id in sent_ids:
+                continue
+
+            message = format_message(car)
             send_telegram(message)
-            updated_sent.append(ad["id"])
 
-    save_sent(updated_sent)
+            print("Новое объявление:", message)
 
+            sent_ids.add(car_id)
 
-if __name__ == "__main__":
-    main()
+        save_sent(sent_ids)
+
+    except Exception as e:
+        print("Ошибка:", e)
+
+    time.sleep(CHECK_INTERVAL)
