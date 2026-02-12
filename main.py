@@ -6,7 +6,7 @@ import re
 
 URL = "https://www.major-expert.ru/buy/"
 BASE = "https://www.major-expert.ru"
-MAX_PRICE = 3000000
+MAX_PRICE = 5000000
 
 TOKEN = "8447981017:AAH8HboVB0LTZwdHCO7G4tGYrPJQq9oaKSg"
 CHAT_ID = "1436689911"
