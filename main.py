@@ -3,8 +3,8 @@ import time
 import json
 import os
 
-TOKEN = "ТВОЙ_TOKEN"
-CHAT_ID = "ТВОЙ_CHAT_ID"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 API_URL = "https://new.major-expert.ru/api/items-by-url"
 CHECK_INTERVAL = 60   # проверка раз в минуту
