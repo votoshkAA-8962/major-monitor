@@ -13,6 +13,8 @@ MAX_PRICE = 3000000
 TOKEN = "8447981017:AAH8HboVB0LTZwdHCO7G4tGYrPJQq9oaKSg"
 CHAT_ID = "1436689911"
 
+DB_FILE = "sent_ads.json"
+
 
 def send_telegram(text):
     requests.post(
@@ -32,6 +34,25 @@ def extract_price(text):
     return None
 
 
+def extract_id(link):
+    match = re.search(r"/cars/(\d+)", link)
+    if match:
+        return match.group(1)
+    return None
+
+
+def load_sent():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+
+def save_sent(data):
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f)
+
+
 def get_ads():
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(URL, headers=headers)
@@ -43,13 +64,16 @@ def get_ads():
         href = card["href"]
 
         if "/cars/" in href:
+            link = BASE + href
             full_text = card.get_text(" ", strip=True)
 
             price = extract_price(full_text)
             if price and MIN_PRICE <= price <= MAX_PRICE:
-                link = BASE + href
+
+                ad_id = extract_id(link)
 
                 ads.append({
+                    "id": ad_id,
                     "link": link,
                     "price": price,
                     "text": full_text
@@ -58,32 +82,19 @@ def get_ads():
     return ads
 
 
-def load_old():
-    try:
-        with open("ads.json", "r") as f:
-            return json.load(f)
-    except:
-        return []
-
-
-def save_ads(ads):
-    with open("ads.json", "w") as f:
-        json.dump(ads, f)
-
-
 def main():
-    old_ads = load_old()
-    old_links = [ad["link"] for ad in old_ads]
-
+    sent_ads = load_sent()
     new_ads = get_ads()
 
-    fresh = [ad for ad in new_ads if ad["link"] not in old_links]
+    updated_sent = sent_ads.copy()
 
-    for ad in fresh:
-        message = f"{format(ad['price'], ',').replace(',', ' ')} руб. | {ad['text']}\n{ad['link']}"
-        send_telegram(message)
+    for ad in new_ads:
+        if ad["id"] not in sent_ads:
+            message = f"{format(ad['price'], ',').replace(',', ' ')} руб. | {ad['text']}\n{ad['link']}"
+            send_telegram(message)
+            updated_sent.append(ad["id"])
 
-    save_ads(new_ads)
+    save_sent(updated_sent)
 
 
 if __name__ == "__main__":
