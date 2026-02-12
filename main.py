@@ -1,5 +1,4 @@
 import requests
-import time
 import json
 import os
 
@@ -7,12 +6,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 API_URL = "https://new.major-expert.ru/api/items-by-url"
-CHECK_INTERVAL = 60   # проверка раз в минуту
 
 PRICE_MIN = 100000
 PRICE_MAX = 5000000
 
-DB_FILE = "sent.json"
+DB_FILE = "sent_ads.json"
 
 
 def load_sent():
@@ -28,7 +26,7 @@ def save_sent(sent_ids):
 
 
 def send_telegram(text):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     requests.post(url, data={
         "chat_id": CHAT_ID,
         "text": text,
@@ -37,55 +35,46 @@ def send_telegram(text):
 
 
 def get_cars():
-    params = {
-        "url": "/cars/moscow/"
-    }
-
-    r = requests.get(API_URL, params=params, timeout=10)
+    params = {"url": "/cars/moscow/"}
+    r = requests.get(API_URL, params=params, timeout=15)
     data = r.json()
-
     return data["data"]["items"]
 
 
 def format_message(car):
     price = car.get("price", 0)
     name = car.get("fullName", "Без названия")
-    car_id = car.get("oid")
+    car_id = car.get("id")
 
     link = f"https://new.major-expert.ru/cars/{car_id}/"
-
     text = f"{price:,} руб. | {name} {link}"
     return text.replace(",", " ")
 
 
-sent_ids = load_sent()
+def main():
+    sent_ids = load_sent()
+    print("Проверка объявлений...")
 
-print("Бот запущен...")
+    cars = get_cars()
 
-while True:
-    try:
-        cars = get_cars()
+    for car in cars:
+        car_id = car.get("id")
+        price = car.get("price", 0)
 
-        for car in cars:
-            car_id = car["id"]
-            price = car.get("price", 0)
+        if price < PRICE_MIN or price > PRICE_MAX:
+            continue
 
-            if price < PRICE_MIN or price > PRICE_MAX:
-                continue
+        if car_id in sent_ids:
+            continue
 
-            if car_id in sent_ids:
-                continue
+        message = format_message(car)
+        send_telegram(message)
 
-            message = format_message(car)
-            send_telegram(message)
+        print("Новое объявление:", message)
+        sent_ids.add(car_id)
 
-            print("Новое объявление:", message)
+    save_sent(sent_ids)
 
-            sent_ids.add(car_id)
 
-        save_sent(sent_ids)
-
-    except Exception as e:
-        print("Ошибка:", e)
-
-    time.sleep(CHECK_INTERVAL)
+if __name__ == "__main__":
+    main()
