@@ -2,7 +2,7 @@ name: Major Monitor
 
 on:
   schedule:
-    - cron: '32 * * * *'
+    - cron: '33 * * * *'
   workflow_dispatch:
 
 jobs:
