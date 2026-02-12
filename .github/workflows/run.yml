@@ -2,12 +2,15 @@ name: Major Monitor
 
 on:
   schedule:
-    - cron: '33 * * * *'
+    - cron: '32 * * * *'
   workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v3
@@ -22,3 +25,11 @@ jobs:
 
       - name: Run script
         run: python main.py
+
+      - name: Commit database
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "github-actions"
+          git add sent_ads.json
+          git commit -m "Update sent ads database" || echo "No changes"
+          git push
