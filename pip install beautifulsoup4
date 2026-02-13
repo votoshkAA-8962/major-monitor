@@ -1,0 +1,8 @@
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(html, "html.parser")
+
+cars = soup.find_all("div", class_="car-item")  # класс может отличаться
+for car in cars:
+    title = car.get_text(strip=True)
+    print(title)
